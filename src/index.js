@@ -27,6 +27,11 @@ app.get('/', (req, res) => {
   return res.send('Please enter the app as a Librarian or User.');
 });
 
+app.use((err, req, res, next)=>{
+  res.status(err.status || 500 ).json({message:err.message})
+})
+
+
 const server = app.listen(PORT, ()=>{
   const tableCopies = 'TableCopies'
   const tableMocksDir = path.join(__dirname, '..', 'Tables', tableCopies)
@@ -52,6 +57,5 @@ process.on( 'EXIT', ()=>{
   cleanUp(tableMocksDir)
   return;
 })
-
 
 

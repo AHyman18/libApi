@@ -1,92 +1,109 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
-const { json } = require('body-parser');
 const libRouter = express();
-
 let booksLogMock, booksTableMock
 
-// const booksLogMock = require('../../Tables/TableCopies/booksLogTableMock.js');
-// const booksTableMock =  require('../../Tables/TableCopies/booksTableMock.js')
-
-libRouter.use('/', (req, res, next) => {
+libRouter.use((req, res, next) => {
   return res.locals.librarian
     ? next()
     : res.send('You are not authorized to access this route.');
     next()
 });
 
-libRouter.use('/', (req,res)=>{
+libRouter.use((req,res, next)=>{
   const tableCopies = 'TableCopies'
-  const tableMocksDir = path.join(__dirname, '..', 'Tables', tableCopies)
+  const tableMocksDir = path.join(__dirname, '..', '..', 'Tables', tableCopies)
   if(fs.existsSync(tableMocksDir)){
     booksLogMock = require('../../Tables/TableCopies/booksLogTableMock.js');
-    booksTableMock =  require('../../Tables/TableCopies/booksTableMock.js')
+    booksTableMock = require('../../Tables/TableCopies/booksTableMock.js')
   }
-  next()
+  return next()
 })
 
-libRouter.get('/allbooks', (req,res)=> res.send(booksTableMock))
+libRouter.get('/allbooks', (req,res)=> res.status(200).send(booksTableMock))
 
-libRouter.get('/overdueBooks', (req, res) => {
-  //addlimit?
-  const overdueBookList = booksLogMock.map((user) => {
-    //bookglogs not updating individual user table
-    const { log } = user;
-    return log.filter((book) => book.overDue < 0);
-  });
-
-  return res.send(overdueBookList);
-});
-
-
-libRouter.delete('/:id', (req, res) => {
-  const bookTable_MockPath = path.join(__dirname, '..', '..', 'Tables', 'TableCopies','booksTableMock.js')
-  const { id } = req.params;
-  let deletedItem;
-
-  const updatedLibrary = booksTableMock.filter((book) => {
-    if(book.id === Number(id)) deletedItem = book
-    return book.id !== Number(id)
-  });
-
-  const updatedLibStr = `module.exports = ${JSON.stringify(updatedLibrary)}`;
-
-  fs.writeFile(bookTable_MockPath, updatedLibStr, (err) => {
-    if (err) console.log('//');
-    else console.log('success //');
-  });
-  return res.send(updatedLibrary)
-});
-
-
-//book needs to have all info in post request
-libRouter.post('/addBook', (req, res) => {
-const booksTable_PathMock =path.join(__dirname, '../../Tables/TableCopies/booksTableMock.js')
-  const { body } = req;
-  if (
-    !body.isbn['isbn10'] ||
-    !body.isbn['isbn13'] ||
-    !body.title ||
-    !body.stock
-  ) {
-    res.send('nope make your input better');
+libRouter.get('/overduebooks', (req, res, next) => {
+  try{
+    const overdueBookList = booksLogMock.map((user) => {
+      const { log } = user;
+      return log.filter((book) => book.overDue < 0);
+    });
+    return res.status(200).send(overdueBookList);
+  } catch(err){
+    const errorObj={
+      message:'Error requesting overdue books',
+      status: 500
+    }
+    return next(errorObj)
   }
-  //doesnt handle duplicates
+});
 
-  body.id = booksTableMock[booksTableMock.length - 1]['id'] + 1;
 
-  booksTableMock.push(body);
+libRouter.delete('/deletebook/:id', (req, res) => {
+  try{
+    const bookTable_MockPath = path.join(__dirname, '..', '..', 'Tables', 'TableCopies','booksTableMock.js')
+    const { id } = req.params;
+    let idExistsInLog = false;
+    let deletedItem;
+  
+    const updatedLibrary = booksTableMock.filter((book) => {
+      if(book.id === Number(id)) {
+        deletedItem = book;
+        idExistsInLog =true;
+      }
+      return book.id !== Number(id)
+    });
+    
+    if(!idExistsInLog) return next({message:'The tittle you are trying to delete does not exist in the log', status: 204})
+    const updatedLibStr = `module.exports = ${JSON.stringify(updatedLibrary)}`;
+  
+    fs.writeFile(bookTable_MockPath, updatedLibStr, (err) => {
+      if (err) return next({message: 'Unable to update Book Table file Log', status: 500})
+      else return res.status(200).send(updatedLibrary)
+    });
+  } catch (err){
+    const errorObj={
+      message:'Unable to delete file from log.',
+      status: 500
+    }
+    return next(errorObj)
+  }
+  
+  
+});
 
-  const updatedLibStr = `module.exports = ${JSON.stringify(booksTableMock)}`;
 
-  fs.writeFile(booksTable_PathMock, updatedLibStr, (err) => {
-    if (err) console.log('//');
-    else console.log('success //');
-  });
+libRouter.post('/addBook', (req, res) => {
+  try{
+    const booksTable_PathMock =path.join(__dirname, '../../Tables/TableCopies/booksTableMock.js')
+    const { body } = req;
+    if (
+      !body.isbn['isbn10'] ||
+      !body.isbn['isbn13'] ||
+      !body.title ||
+      !body.stock
+    ) {
+      res.status(200).send('nope make your input better');
+    }
 
-  res.send(updatedLibStr);
+    body.id = booksTableMock[booksTableMock.length - 1]['id'] + 1;
 
+    booksTableMock.push(body);
+
+    const updatedLibStr = `module.exports = ${JSON.stringify(booksTableMock)}`;
+
+    fs.writeFile(booksTable_PathMock, updatedLibStr, (err) => {
+      if (err) return next({message: 'Unable to update Book Table file Log', status: 500})
+      else return res.status(200).send(updatedLibStr);
+    });
+  } catch(err){
+    const errorObj={
+      message:'Error adding book to log',
+      status: 500
+    }
+    return next(errorObj)
+  }
 });
 
 
