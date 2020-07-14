@@ -55,6 +55,7 @@ process.on( 'EXIT', ()=>{
   const tableCopies = 'TableCopies'
   const tableMocksDir = path.join(__dirname, '..', 'Tables', tableCopies)
   cleanUp(tableMocksDir)
+  server.close()
   return;
 })
 
